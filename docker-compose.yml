@@ -1,0 +1,50 @@
+version: "3.1"
+services:
+    webserver:
+        image: nginx:alpine
+        container_name: httpmqttgateway_nginx
+        env_file: .env
+        networks:
+            deploy-internal:
+            fpm-proxy:
+                aliases:
+                    - httpmqttgateway_nginx
+        volumes:
+            - ../infra_acl/phpdocker/certs:/etc/ssl/crt
+            - ./nginx/deploy.conf:/etc/nginx/conf.d/99-deploy.conf
+            - ./app:/var/www/html
+            - /var/run/docker.sock:/tmp/docker.sock:ro
+        expose:
+            - 80
+        restart: unless-stopped
+
+    httpmqttgateway_php:
+        build: php
+        container_name: httpmqttgateway_php
+        env_file: .env
+        networks:
+            deploy-internal:
+        volumes:
+            - ./app:/var/www/html
+            - ./logs:/var/www/html/logs
+            - ./php/php-ini-overrides.ini:/etc/php/7.3/fpm/conf.d/99-overrides.ini
+        restart: unless-stopped
+
+    httpmqttgateway_mqttlistener:
+        build: php-cli
+        container_name: httpmqttgateway_mqttlistener
+        volumes:
+            - ./app:/var/www/html
+            - ./logs:/var/www/html/logs
+            - ./php-cli/php-ini-overrides.ini:/etc/php/7.3/cli/conf.d/99-overrides.ini
+        env_file: .env
+        entrypoint:
+            - /usr/bin/php
+            - /var/www/html/jobs/mqtt_to_http_gateway.php
+        restart: unless-stopped
+
+networks:
+    deploy-internal:
+    fpm-proxy:
+        external:
+            name: fpm-proxy
